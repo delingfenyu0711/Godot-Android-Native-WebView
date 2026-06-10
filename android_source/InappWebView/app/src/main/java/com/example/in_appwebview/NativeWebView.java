@@ -6,6 +6,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.collection.ArraySet;
@@ -28,42 +29,41 @@ public class NativeWebView extends GodotPlugin {
     @NonNull
     @Override
     public String getPluginName() {
-        // 这是在 Godot C# 里获取单例的名字
         return "NativeWebView";
     }
 
-    // 1. 暴露给 Godot 的打开网页方法
     @UsedByGodot
     public void open(String url) {
-        // WebView 必须在安卓的主 UI 线程中运行
         runOnUiThread(() -> {
             if (webView == null) {
-                // 初始化纯内嵌式 WebView
                 webView = new WebView(getActivity());
 
-                // 核心权限配置：允许读取 file:// 本地文件，允许执行 JS
                 WebSettings settings = webView.getSettings();
                 settings.setJavaScriptEnabled(true);
                 settings.setAllowFileAccess(true);
                 settings.setDomStorageEnabled(true);
 
-                // 背景透明，完美融合 Godot 游戏画面
+
+                settings.setAllowFileAccessFromFileURLs(true);
+                settings.setAllowUniversalAccessFromFileURLs(true);
+                
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                    settings.setMediaPlaybackRequiresUserGesture(false);
+                }
+
                 webView.setBackgroundColor(0x00000000);
 
-                // 2. 拦截协议，实现 JS 向 Godot 发送信号
                 webView.setWebViewClient(new WebViewClient() {
                     @Override
                     public boolean shouldOverrideUrlLoading(WebView view, String url) {
                         if (url.startsWith("godot://")) {
-                            // 捕捉到通关信号，发射给 Godot
                             emitSignal("on_url_changed", url);
-                            return true; // 拦截系统跳转
+                            return true;
                         }
                         return false;
                     }
                 });
 
-                // 3. 将 WebView 盖在 Godot 渲染层之上
                 FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -76,7 +76,6 @@ public class NativeWebView extends GodotPlugin {
         });
     }
 
-    // 执行 JavaScript 代码
     @UsedByGodot
     public void evaluate_javascript(String jsCode) {
         runOnUiThread(() -> {
@@ -86,7 +85,6 @@ public class NativeWebView extends GodotPlugin {
         });
     }
 
-    // 隐藏 WebView 露出游戏画面
     @UsedByGodot
     public void hide() {
         runOnUiThread(() -> {
@@ -96,7 +94,6 @@ public class NativeWebView extends GodotPlugin {
         });
     }
 
-    // 注册要发送给 Godot 的信号
     @NonNull
     @Override
     public Set<SignalInfo> getPluginSignals() {
